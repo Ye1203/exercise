@@ -1,0 +1,185 @@
+---
+title: "strawberry"
+author: "Bingtian Ye"
+date: "2023-10-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load("ggplot2","rstanarm","tidyverse","dplyr","knitr","kableExtra","stringr")
+```
+##read data
+```{r}
+strawberry=read.csv("strawberry.csv",header = T)
+```
+##Data Overview
+```{r}
+summary(strawberry)
+head(strawberry)
+```
+##Data preparing
+###Remove columns with a single value in all columns (from giving qmd)
+```{r}
+#define the function
+drop_one_value_col <- function(df){
+drop <- NULL
+for(i in 1:dim(df)[2]){ #1:colume number
+if((df |> distinct(df[,i]) |> count()) == 1){ #if only have one value, add i in drop
+drop = c(drop, i)
+} }
+
+if(is.null(drop)){return("none")}else{
+
+   print("Columns dropped:")
+   print(colnames(df)[drop])
+   strawberry <- df[, -1*drop]
+}
+}
+#use function
+strawberry_dropOneValue=drop_one_value_col(strawberry)
+head(strawberry_dropOneValue)
+```
+###Overview the value of each colume.
+```{r}
+value_unique=lapply(strawberry_dropOneValue, function(x) head(unique(x), 5))
+value_unique
+```
+###Data processing of Value and CV...
+```{r,warning=F}
+#the value (D) means: Withheld to avoid disclosing data for individual operations. 
+#the value (H) means: Coefficient of variation or generalized coefficient of variation is greater than or equal to 99.95 percent or the standard error is greater than or equal to 99.95 percent of the mean
+straw_na <- strawberry_dropOneValue |> filter(CV....=="(H)"|CV....=="(D)"|Value=="(D)")
+vals=strawberry_dropOneValue$Value
+vals=sub(",","",vals)
+vals=sub('""',"",vals)
+vals=as.numeric(vals)
+strawberry_dropOneValue["Value"]=vals
+vals=strawberry_dropOneValue$CV....
+vals=as.numeric(vals)
+strawberry_dropOneValue["CV...."]=vals
+```
+###Classified by program
+```{r}
+stb_census <- strawberry_dropOneValue |> filter(Program=="CENSUS")
+
+## ## filter rows of California data from the SURVEY data
+stb_survey <- strawberry_dropOneValue |> filter(Program=="SURVEY")
+
+census_col <- colnames(stb_census)
+
+survey_col <- colnames(stb_survey)
+
+```
+```{r}
+stb_census %>%
+  group_by(State) %>%
+  summarise(Total_Value = sum(Value, na.rm = TRUE))
+stb_survey %>%
+  group_by(State) %>%
+  summarise(Total_Value = sum(Value, na.rm = TRUE))
+```
+```{r}
+year_census <- stb_census %>%
+  group_by(Year) %>%
+  summarise(Sum_Value = sum(Value, na.rm = TRUE))
+year_survey <- stb_survey %>%
+  group_by(Year) %>%
+  summarise(Sum_Value = sum(Value, na.rm = TRUE))
+ggplot(year_survey) +
+  aes(x = Year, y = Sum_Value) +
+  geom_point(shape = "circle", size = 2.5, colour = "#112446") +
+  theme_minimal()
+```
+
+Extract market names and chemical substances and their codes
+```{r}
+stb_census <- stb_census %>%
+  mutate(Data.Item = ifelse(
+    str_detect(Data.Item, "MEASURED IN"),
+    str_extract(Data.Item, "(?<=MEASURED IN ).*"),
+    ifelse(str_detect(Data.Item, "SALES"), "SALES", Data.Item)
+  ))
+stb_survey <- stb_survey %>%
+  mutate(
+    Chemical = if_else(str_detect(Domain.Category, "\\(.*=.*\\)"),
+                       str_extract(Domain.Category, "(?<=\\().*?(?=\\=)"),
+                       NA_character_),
+    Chemical_Code = if_else(str_detect(Domain.Category, "\\(.*=.*\\)"),
+                            str_extract(Domain.Category, "(?<=\\=).*?(?=\\))"),
+                            NA_character_)
+  )
+```
+
+```{r}
+stb_census=subset(stb_census, !is.na(Value))
+stb_survey=subset(stb_survey, !is.na(Value))
+library(sf)
+library(tools)
+library(plotly)
+# average_values <- stb_census %>%
+#   group_by(State) %>%
+#   summarise(Average_Value = mean(Value, na.rm = TRUE))
+us_states <- st_read("https://eric.clst.org/assets/wiki/uploads/Stuff/gz_2010_us_040_00_5m.json")
+capitalize_first <- function(string) {
+  paste0(toupper(substr(string, 1, 1)), tolower(substr(string, 2, nchar(string))))
+}
+
+# df <- data.frame(State = sapply(average_values$State, capitalize_first), 
+#                  Value = average_values$Value)
+stb_census_money=stb_census|>
+  filter(Data.Item=="$")
+values <- stb_census_money %>%
+  group_by(State,Year) %>%
+  summarise(Value = mean(Value, na.rm = TRUE))
+values$State<-sapply(values$State, capitalize_first)
+merged_data <- left_join(us_states, values, by = c("NAME" = "State"))
+
+p <- ggplot(data = merged_data) +
+  geom_sf(aes(fill = Value, frame = Year)) +
+  scale_fill_gradient(low = "lightblue", high = "darkred") +
+  theme_minimal() +
+  labs(title = "Value by State", fill = "Value") +
+  coord_sf(xlim = c(-170, -65), ylim = c(25, 72))
+plotly_map <- ggplotly(p)
+plotly_map
+
+```
+```{r}
+stb_census_sales=stb_census|>
+  filter(Data.Item=="SALES")
+values <- stb_census_sales %>%
+  group_by(State,Year) %>%
+  summarise(Value = mean(Value, na.rm = TRUE))
+values$State<-sapply(values$State, capitalize_first)
+merged_data <- left_join(us_states, values, by = c("NAME" = "State"))
+
+p <- ggplot(data = merged_data) +
+  geom_sf(aes(fill = Value, frame = Year)) +
+  scale_fill_gradient(low = "lightblue", high = "darkred") +
+  theme_minimal() +
+  labs(title = "Value by State", fill = "Value") +
+  coord_sf(xlim = c(-170, -65), ylim = c(25, 72))
+plotly_map <- ggplotly(p)
+plotly_map
+```
+```{r}
+stb_census_cwt=stb_census|>
+  filter(Data.Item=="CWT")
+values <- stb_census_cwt %>%
+  group_by(State,Year) %>%
+  summarise(Value = mean(Value, na.rm = TRUE))
+values$State<-sapply(values$State, capitalize_first)
+merged_data <- left_join(us_states, values, by = c("NAME" = "State"))
+
+p <- ggplot(data = merged_data) +
+  geom_sf(aes(fill = Value, frame = Year)) +
+  scale_fill_gradient(low = "lightblue", high = "darkred") +
+  theme_minimal() +
+  labs(title = "Value by State", fill = "Value") +
+  coord_sf(xlim = c(-170, -65), ylim = c(25, 72))
+plotly_map <- ggplotly(p)
+plotly_map
+```
+
+
