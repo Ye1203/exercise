@@ -2,7 +2,9 @@
 title: "strawberry"
 author: "Bingtian Ye"
 date: "2023-10-11"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -181,5 +183,51 @@ p <- ggplot(data = merged_data) +
 plotly_map <- ggplotly(p)
 plotly_map
 ```
+```{r}
+# stb_survey$Chemical_Code_num <- as.numeric(stb_survey$Chemical_Code)
+# stb_survey$Chemical_Code_str <- ifelse(is.na(stb_survey$Chemical_Code_num),
+#                                         NA,
+#                                         sprintf("%06d", stb_survey$Chemical_Code_num))
+# library(httr)
+# library(jsonlite)
+# get_cas <- function(PC){
+#     path <- paste0("https://ordspub.epa.gov/ords/pesticides/apprilapi/?q=%7b%22ais%22:%7b%22$instr%22:%22", PC,"%22%7d%7d")
+#     r <- GET(url = path)
+#     r_text <- content(r, as = "text", encoding = "UTF-8")
+#     df <- fromJSON(r_text, flatten = TRUE)
+#     df_strwb <- df$items[grepl("Strawberries", df$items$sites, fixed=T),]
+#     ais <- df_strwb$ais[1]
+#     pattern <- "\\(([^A-Za-z]+)\\/([0-9-]+)\\)"
+#     text <- ais
+#     matches <- regmatches(text, gregexpr(pattern, text))
+#     cas <- sapply(matches, function(x) gsub(".*\\/([0-9-]+)\\)", "\\1", x)) 
+#     if (is.character(cas)) {
+#         return(cas[1])
+# } 
+#     else {
+#         return("can't find")
+# }
+# }
+# unique_stb=unique(stb_survey$Chemical_Code_str)
+# result=numeric()
+# k=numeric()
+# for(i in 1:length(unique_stb)){
+#   result[i]=get_cas(unique_stb[i])
+#   k[i]=unique_stb[i]
+#   print(result[i])
+# }
+# data_save=data.frame(k,result)
+# write.csv(data_save,"/Users/bingtianye/Desktop/data_save.csv",row.names = F)
+```
+```{r}
 
+data_save=read.csv("/Users/bingtianye/Desktop/bu_study/MA615 Data Science in R/exercise/data_save",header=T)
+data_save$Chemical_Code_num <- as.numeric(data_save$k)
+data_save$Chemical_Code_str <- ifelse(is.na(data_save$Chemical_Code_num),
+                                         NA,
+                                         sprintf("%06d", data_save$Chemical_Code_num))
+po=read.csv("/Users/bingtianye/Desktop/bu_study/MA615 Data Science in R/exercise/CAS.csv",header=T)
+merged_data <- merge(data_save, po, by.x="result", by.y="chemical", all.x=TRUE)
+
+```
 
