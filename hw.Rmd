@@ -228,6 +228,7 @@ data_save$Chemical_Code_str <- ifelse(is.na(data_save$Chemical_Code_num),
                                          sprintf("%06d", data_save$Chemical_Code_num))
 po=read.csv("/Users/bingtianye/Desktop/bu_study/MA615 Data Science in R/exercise/CAS.csv",header=T)
 merged_data <- merge(data_save, po, by.x="result", by.y="chemical", all.x=TRUE)
+#merged_data has too many NA value, so I don't want to merge it in strawberry(stb_survey).
 
 ```
 
